@@ -263,3 +263,142 @@ export async function sendUserAuditEmail(opts: {
     html: buildUserAuditEmail({ ...opts, bookingUrl }),
   });
 }
+
+// ---------------------------------------------------------------------------
+// Manual-audit fallback emails (sent when automated analysis fails)
+// ---------------------------------------------------------------------------
+
+function buildManualSusanEmail(opts: {
+  lead: LeadPayload;
+  analysisError: string;
+}): string {
+  const { lead, analysisError } = opts;
+  return `<!doctype html>
+<html>
+<body style="margin:0;padding:0;background:#F5F2EC;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#0F1419;">
+  <div style="max-width:640px;margin:0 auto;padding:24px;">
+    <div style="background:#dc2626;color:#fff;padding:20px 24px;border-radius:16px 16px 0 0;">
+      <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.2em;color:#fff;">Manual audit needed</div>
+      <div style="margin-top:6px;font-size:22px;font-weight:600;">${escapeHtml(lead.name)} · automated audit failed</div>
+    </div>
+
+    <div style="background:#fff;padding:24px;border-radius:0 0 16px 16px;border:1px solid #eee;border-top:0;">
+      <p style="margin:0 0 8px;font-size:13px;color:#64748b;text-transform:uppercase;letter-spacing:0.1em;">Reason</p>
+      <div style="background:#fef2f2;border:1px solid #fecaca;padding:12px;border-radius:10px;font-size:13px;color:#991b1b;margin-bottom:20px;">
+        ${escapeHtml(analysisError)}
+      </div>
+
+      <p style="margin:0 0 8px;font-size:13px;color:#64748b;text-transform:uppercase;letter-spacing:0.1em;">Contact</p>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:20px;">
+        <tr><td style="padding:6px 0;color:#64748b;width:140px;">Name</td><td style="padding:6px 0;font-weight:600;">${escapeHtml(lead.name)}</td></tr>
+        <tr><td style="padding:6px 0;color:#64748b;">Email</td><td style="padding:6px 0;"><a href="mailto:${escapeHtml(lead.email)}" style="color:#1B2A5E;">${escapeHtml(lead.email)}</a></td></tr>
+        <tr><td style="padding:6px 0;color:#64748b;">Website</td><td style="padding:6px 0;"><a href="${escapeHtml(lead.url)}" style="color:#1B2A5E;">${escapeHtml(lead.url)}</a></td></tr>
+      </table>
+
+      <p style="margin:0 0 8px;font-size:13px;color:#64748b;text-transform:uppercase;letter-spacing:0.1em;">Qualifiers</p>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:20px;">
+        <tr><td style="padding:6px 0;color:#64748b;width:200px;">Current sales source</td><td style="padding:6px 0;">${escapeHtml(labelFor(SALES_SOURCES, lead.salesSource))}</td></tr>
+        <tr><td style="padding:6px 0;color:#64748b;">Website goals</td><td style="padding:6px 0;">${escapeHtml(lead.websiteGoals.map((g) => labelFor(WEBSITE_GOALS, g)).join(", "))}</td></tr>
+        <tr><td style="padding:6px 0;color:#64748b;">Transactions / month</td><td style="padding:6px 0;">${escapeHtml(labelFor(TRANSACTION_VOLUMES, lead.transactionVolume))}</td></tr>
+        <tr><td style="padding:6px 0;color:#64748b;">Avg transaction value</td><td style="padding:6px 0;">${escapeHtml(labelFor(TRANSACTION_VALUES, lead.transactionValue))}</td></tr>
+      </table>
+
+      <p style="margin:0;font-size:13px;color:#64748b;">
+        Visitor was told you would personally review their site and reply within 24 hours.
+      </p>
+    </div>
+
+    <p style="margin:20px 0 0;text-align:center;color:#94a3b8;font-size:12px;">
+      Reply to this email to follow up. Sent by the Hub Solutions Audit tool.
+    </p>
+  </div>
+</body>
+</html>`;
+}
+
+function buildManualUserEmail(opts: {
+  lead: LeadPayload;
+  bookingUrl: string;
+}): string {
+  const { lead, bookingUrl } = opts;
+  const firstName = lead.name.split(/\s+/)[0] ?? lead.name;
+  return `<!doctype html>
+<html>
+<body style="margin:0;padding:0;background:#F5F2EC;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#0F1419;">
+  <div style="max-width:640px;margin:0 auto;padding:24px;">
+    <div style="background:#1B2A5E;color:#fff;padding:24px;border-radius:16px 16px 0 0;">
+      <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.2em;color:#FFC72C;">We&rsquo;re on it</div>
+      <div style="margin-top:8px;font-size:24px;font-weight:600;">Hi ${escapeHtml(firstName)}, your audit needs a human touch.</div>
+    </div>
+
+    <div style="background:#fff;padding:24px;border-radius:0 0 16px 16px;border:1px solid #eee;border-top:0;">
+      <p style="margin:0 0 16px;">
+        Our automated tool couldn&rsquo;t capture <strong>${escapeHtml(lead.url)}</strong>.
+        That&rsquo;s usually a signal about how your site treats bots, not a problem with your business.
+      </p>
+
+      <p style="margin:0 0 8px;font-size:13px;color:#64748b;text-transform:uppercase;letter-spacing:0.1em;">Common reasons</p>
+      <ul style="margin:0 0 20px;padding-left:20px;color:#475569;font-size:14px;">
+        <li style="margin-bottom:6px;"><strong>Bot protection</strong> (Cloudflare, anti-DDoS, or a strict WAF) blocked our crawler.</li>
+        <li style="margin-bottom:6px;"><strong>Slow or busy server</strong> took longer than 60 seconds to render.</li>
+        <li style="margin-bottom:6px;"><strong>Login or paywall</strong> sits in front of key pages.</li>
+        <li style="margin-bottom:6px;"><strong>Heavy single-page app</strong> needs extra runtime to surface content.</li>
+      </ul>
+
+      <p style="margin:0 0 16px;">
+        None of these are dealbreakers. Susan will personally review your site
+        against the same 10-point framework and email you the full audit within 24 hours.
+      </p>
+
+      <div style="background:#1B2A5E;color:#fff;padding:20px;border-radius:12px;text-align:center;">
+        <div style="font-size:18px;font-weight:600;">Want to skip the wait?</div>
+        <div style="margin-top:6px;font-size:14px;color:rgba(255,255,255,0.75);">Book a 15-minute strategy call now and we&rsquo;ll walk through your site live.</div>
+        <a href="${escapeHtml(bookingUrl)}" style="display:inline-block;margin-top:14px;background:#F7941D;color:#1B2A5E;padding:12px 22px;border-radius:999px;text-decoration:none;font-weight:600;">Book my strategy call</a>
+      </div>
+    </div>
+
+    <p style="margin:16px 0 0;text-align:center;color:#94a3b8;font-size:12px;">
+      Hub Solutions Digital · Singapore
+    </p>
+  </div>
+</body>
+</html>`;
+}
+
+export async function sendManualAuditNoticeToSusan(opts: {
+  lead: LeadPayload;
+  analysisError: string;
+}): Promise<void> {
+  const from = process.env.EMAIL_FROM ?? "audit@hubsolutions.one";
+  const to = process.env.SUSAN_NOTIFICATION_EMAIL;
+  if (!to) throw new Error("SUSAN_NOTIFICATION_EMAIL missing");
+
+  const subject = `MANUAL AUDIT NEEDED: ${opts.lead.name} · ${opts.lead.url}`;
+
+  await getResend().emails.send({
+    from,
+    to,
+    replyTo: opts.lead.email,
+    subject,
+    html: buildManualSusanEmail(opts),
+  });
+}
+
+export async function sendManualAuditNoticeToUser(opts: {
+  lead: LeadPayload;
+}): Promise<void> {
+  const from = process.env.EMAIL_FROM ?? "audit@hubsolutions.one";
+  const reply = process.env.SUSAN_NOTIFICATION_EMAIL;
+  const bookingUrl =
+    process.env.HUB_SOLUTIONS_BOOKING_URL ?? "https://hubsolutions.one";
+
+  const subject = "We're manually auditing your site";
+
+  await getResend().emails.send({
+    from,
+    to: opts.lead.email,
+    replyTo: reply,
+    subject,
+    html: buildManualUserEmail({ lead: opts.lead, bookingUrl }),
+  });
+}

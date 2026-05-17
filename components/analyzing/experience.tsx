@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Lock } from "lucide-react";
+import { Lock } from "lucide-react";
 import { AnalyzingProgress } from "./progress-bar";
 import { LeadForm } from "./lead-form";
 import type { AnalysisResult } from "@/lib/types";
@@ -11,6 +11,8 @@ import type { LeadPayload } from "@/lib/lead";
 type Props = { url: string };
 
 const MODAL_DELAY_MS = 5000;
+// If we already have an error before the delay fires, open the modal sooner.
+const ERROR_MODAL_DELAY_MS = 1500;
 
 type AnalysisState =
   | { status: "running" }
@@ -48,14 +50,15 @@ export function AnalyzingExperience({ url }: Props) {
         try {
           sessionStorage.setItem(`audit:${result.hash}`, JSON.stringify(result));
         } catch {
-          // sessionStorage may be unavailable in some browsers / private modes
+          // sessionStorage may be unavailable
         }
         setAnalysis({ status: "ready", result });
       } catch (err) {
         if (cancelled) return;
         setAnalysis({
           status: "error",
-          message: err instanceof Error ? err.message : "Could not reach the analyzer.",
+          message:
+            err instanceof Error ? err.message : "Could not reach the analyzer.",
         });
       }
     })();
@@ -64,10 +67,11 @@ export function AnalyzingExperience({ url }: Props) {
     };
   }, [url]);
 
-  // Open the lead modal after a short reading delay (only if no error)
+  // Always open the modal — even on error. We must still collect the lead.
   useEffect(() => {
-    if (analysis.status === "error") return;
-    const id = window.setTimeout(() => setModalOpen(true), MODAL_DELAY_MS);
+    const delay =
+      analysis.status === "error" ? ERROR_MODAL_DELAY_MS : MODAL_DELAY_MS;
+    const id = window.setTimeout(() => setModalOpen(true), delay);
     return () => window.clearTimeout(id);
   }, [analysis.status]);
 
@@ -81,27 +85,37 @@ export function AnalyzingExperience({ url }: Props) {
     };
   }, [modalOpen]);
 
-  // When both lead is captured AND analysis is ready, fire /api/lead and navigate.
+  // When lead is captured AND we have a final analysis state (ready or error),
+  // fire /api/lead and route to the matching destination.
   useEffect(() => {
     if (!pendingLead) return;
-    if (analysis.status !== "ready") return;
+    if (analysis.status === "running") return;
     if (leadFiredRef.current) return;
     leadFiredRef.current = true;
+
+    const successDestination =
+      analysis.status === "ready"
+        ? `/results/${analysis.result.hash}`
+        : "/audit-pending";
 
     (async () => {
       try {
         await fetch("/api/lead", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...pendingLead, analysis: analysis.result }),
+          body: JSON.stringify(
+            analysis.status === "ready"
+              ? { ...pendingLead, analysis: analysis.result }
+              : { ...pendingLead, analysisError: analysis.message }
+          ),
         });
       } catch (err) {
-        console.warn("[lead] submission failed, continuing to results:", err);
+        console.warn("[lead] submission failed, continuing:", err);
       }
       if (navigatedRef.current) return;
       navigatedRef.current = true;
       window.setTimeout(() => {
-        router.push(`/results/${analysis.result.hash}`);
+        router.push(successDestination);
       }, 700);
     })();
   }, [pendingLead, analysis, router]);
@@ -112,8 +126,7 @@ export function AnalyzingExperience({ url }: Props) {
   }
 
   const formSubmitted = pendingLead !== null;
-  const finalize = formSubmitted && analysis.status === "ready";
-  const errored = analysis.status === "error";
+  const finalize = formSubmitted && analysis.status !== "running";
 
   return (
     <div className="bg-hub-bg min-h-screen">
@@ -134,34 +147,24 @@ export function AnalyzingExperience({ url }: Props) {
           <p className="mt-2 text-sm text-hub-ink/60 break-all">{url}</p>
         </div>
 
-        {errored ? (
-          <ErrorState
-            message={analysis.status === "error" ? analysis.message : "Unknown error"}
-            onRetrySame={() => window.location.reload()}
-            onPickNew={() => router.push("/")}
+        <div className="mt-10">
+          <AnalyzingProgress
+            finalize={finalize}
+            analysisReady={analysis.status === "ready"}
+            formSubmitted={formSubmitted}
           />
-        ) : (
-          <>
-            <div className="mt-10">
-              <AnalyzingProgress
-                finalize={finalize}
-                analysisReady={analysis.status === "ready"}
-                formSubmitted={formSubmitted}
-              />
-            </div>
+        </div>
 
-            <div className="mt-8 rounded-2xl bg-white border border-hub-ink/10 p-6 text-center">
-              <div className="text-xs uppercase tracking-widest text-hub-orange font-semibold">
-                Did you know
-              </div>
-              <p className="mt-2 text-hub-ink/70 text-pretty">
-                88% of online users won&rsquo;t return to a site after a bad
-                experience. Your audit checks for the exact triggers that cause
-                them to bounce.
-              </p>
-            </div>
-          </>
-        )}
+        <div className="mt-8 rounded-2xl bg-white border border-hub-ink/10 p-6 text-center">
+          <div className="text-xs uppercase tracking-widest text-hub-orange font-semibold">
+            Did you know
+          </div>
+          <p className="mt-2 text-hub-ink/70 text-pretty">
+            88% of online users won&rsquo;t return to a site after a bad
+            experience. Your audit checks for the exact triggers that cause
+            them to bounce.
+          </p>
+        </div>
       </div>
 
       {modalOpen ? (
@@ -197,46 +200,6 @@ function Modal({ children }: { children: React.ReactNode }) {
         <div className="overflow-y-auto px-6 sm:px-10 py-8 sm:py-10">
           {children}
         </div>
-      </div>
-    </div>
-  );
-}
-
-function ErrorState({
-  message,
-  onRetrySame,
-  onPickNew,
-}: {
-  message: string;
-  onRetrySame: () => void;
-  onPickNew: () => void;
-}) {
-  return (
-    <div className="mt-10 rounded-3xl bg-white border border-red-200 p-8 text-center">
-      <div className="inline-flex items-center justify-center h-12 w-12 rounded-full bg-red-50 text-red-600">
-        <AlertTriangle className="h-6 w-6" />
-      </div>
-      <h2 className="mt-4 font-serif text-2xl text-hub-navy">
-        We couldn&rsquo;t finish your audit.
-      </h2>
-      <p className="mt-2 text-sm text-hub-ink/70 max-w-md mx-auto text-pretty">
-        {message}
-      </p>
-      <div className="mt-6 flex flex-col sm:flex-row gap-3 justify-center">
-        <button
-          type="button"
-          onClick={onRetrySame}
-          className="inline-flex items-center justify-center rounded-full bg-hub-navy px-6 py-3 text-sm font-medium text-white hover:bg-hub-navy/90 transition-colors"
-        >
-          Retry this audit
-        </button>
-        <button
-          type="button"
-          onClick={onPickNew}
-          className="inline-flex items-center justify-center rounded-full border border-hub-ink/15 bg-white px-6 py-3 text-sm font-medium text-hub-navy hover:bg-hub-bg transition-colors"
-        >
-          Try a different URL
-        </button>
       </div>
     </div>
   );

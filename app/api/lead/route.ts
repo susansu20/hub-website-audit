@@ -10,7 +10,12 @@ import {
 import { getCachedAnalysis, hashUrl, setCachedAnalysis } from "@/lib/cache";
 import { validateAndNormalizeUrl } from "@/lib/url";
 import { appendLeadRow } from "@/lib/sheets";
-import { sendAuditLeadEmail, sendUserAuditEmail } from "@/lib/email";
+import {
+  sendAuditLeadEmail,
+  sendManualAuditNoticeToSusan,
+  sendManualAuditNoticeToUser,
+  sendUserAuditEmail,
+} from "@/lib/email";
 import type { AnalysisResult } from "@/lib/types";
 import { SCHEMA_VERSION } from "@/lib/types";
 
@@ -29,6 +34,7 @@ function originFromRequest(req: Request): string | null {
 
 type LeadRequestBody = Partial<LeadPayload> & {
   analysis?: AnalysisResult;
+  analysisError?: string;
 };
 
 function isAnalysisResult(value: unknown): value is AnalysisResult {
@@ -102,13 +108,27 @@ export async function POST(req: Request) {
   }
 
   const origin = originFromRequest(req);
-  const publicUrl = origin ? `${origin}/results/${hash}` : null;
+  const publicUrl = analysis && origin ? `${origin}/results/${hash}` : null;
 
-  // Fire all three in parallel. Any of them failing should not block the user.
+  const analysisError =
+    typeof body.analysisError === "string" && body.analysisError.trim()
+      ? body.analysisError.trim().slice(0, 500)
+      : null;
+
+  const manualMode = !analysis && analysisError !== null;
+
   const [sheetsResult, susanEmailResult, userEmailResult] = await Promise.allSettled([
-    appendLeadRow({ lead, analysis }),
-    sendAuditLeadEmail({ lead, analysis, publicUrl }),
-    analysis
+    appendLeadRow({
+      lead,
+      analysis,
+      manualNote: manualMode ? `MANUAL AUDIT NEEDED — ${analysisError}` : null,
+    }),
+    manualMode
+      ? sendManualAuditNoticeToSusan({ lead, analysisError: analysisError! })
+      : sendAuditLeadEmail({ lead, analysis, publicUrl }),
+    manualMode
+      ? sendManualAuditNoticeToUser({ lead })
+      : analysis
       ? sendUserAuditEmail({ lead, analysis, publicUrl })
       : Promise.resolve(),
   ]);
@@ -125,6 +145,7 @@ export async function POST(req: Request) {
 
   return NextResponse.json({
     ok: true,
+    manual: manualMode,
     integrations: {
       sheets: sheetsResult.status === "fulfilled",
       susanEmail: susanEmailResult.status === "fulfilled",

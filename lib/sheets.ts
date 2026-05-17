@@ -35,12 +35,15 @@ function topFailedQuestions(result: AnalysisResult | null): string {
 export async function appendLeadRow(opts: {
   lead: LeadPayload;
   analysis: AnalysisResult | null;
+  manualNote?: string | null;
 }): Promise<void> {
   const sheetId = process.env.GOOGLE_SHEETS_ID;
   if (!sheetId) throw new Error("GOOGLE_SHEETS_ID missing");
 
-  const { lead, analysis } = opts;
+  const { lead, analysis, manualNote } = opts;
   const now = new Date().toISOString();
+
+  const lastColumn = manualNote && !analysis ? manualNote : topFailedQuestions(analysis);
 
   const row = [
     now,
@@ -56,7 +59,7 @@ export async function appendLeadRow(opts: {
     lead.transactionValue,
     analysis ? `${analysis.forecast.current.low}-${analysis.forecast.current.high}` : "",
     analysis ? `${analysis.forecast.potential.low}-${analysis.forecast.potential.high}` : "",
-    topFailedQuestions(analysis),
+    lastColumn,
   ];
 
   const sheets = getSheetsClient();
