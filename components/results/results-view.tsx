@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { ArrowRight, Check, CircleHelp, X } from "lucide-react";
+import { ArrowRight, Check, CircleHelp, Mail, PartyPopper, X } from "lucide-react";
 import type { AnalysisResult, QuestionResult } from "@/lib/types";
+import { ShareButtons } from "./share-buttons";
 
 export function ResultsView({ result }: { result: AnalysisResult }) {
   const bookingUrl = process.env.HUB_SOLUTIONS_BOOKING_URL || "#";
@@ -8,14 +9,7 @@ export function ResultsView({ result }: { result: AnalysisResult }) {
   return (
     <div className="bg-hub-bg">
       <div className="mx-auto max-w-5xl px-4 sm:px-6 py-12 sm:py-16 space-y-10">
-        <header className="text-center">
-          <div className="inline-flex items-center gap-2 rounded-full bg-white border border-hub-ink/10 px-3 py-1 text-xs font-medium text-hub-navy shadow-sm">
-            Audit complete
-          </div>
-          <h1 className="mt-4 font-serif text-4xl sm:text-5xl text-hub-navy">
-            {result.host}
-          </h1>
-        </header>
+        <CelebrationHeader result={result} />
 
         <EraCard result={result} />
         <ScoreCard result={result} />
@@ -30,6 +24,32 @@ export function ResultsView({ result }: { result: AnalysisResult }) {
         </p>
       </div>
     </div>
+  );
+}
+
+function CelebrationHeader({ result }: { result: AnalysisResult }) {
+  const scoreLabel = `${result.score.toFixed(1)}/10 (${result.bracketLabel})`;
+  return (
+    <header className="text-center">
+      <div className="inline-flex items-center gap-2 rounded-full bg-hub-yellow text-hub-navy px-4 py-1.5 text-xs font-semibold uppercase tracking-widest shadow-sm">
+        <PartyPopper className="h-3.5 w-3.5" />
+        Your result is out
+      </div>
+      <h1 className="mt-5 font-serif text-5xl sm:text-6xl text-hub-navy text-balance">
+        Here&rsquo;s the verdict for {result.host}.
+      </h1>
+      <p className="mt-3 inline-flex items-center gap-2 text-sm text-hub-ink/60">
+        <Mail className="h-4 w-4" />
+        We&rsquo;ve sent a copy of this audit to your inbox.
+      </p>
+      <div className="mt-6">
+        <ShareButtons
+          host={result.host}
+          era={result.era.verdict}
+          scoreLabel={scoreLabel}
+        />
+      </div>
+    </header>
   );
 }
 

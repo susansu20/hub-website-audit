@@ -51,7 +51,7 @@ export async function appendLeadRow(opts: {
     analysis ? analysis.era.verdict : "",
     analysis ? analysis.bracketLabel : "",
     lead.salesSource,
-    lead.websiteGoal,
+    lead.websiteGoals.join(", "),
     lead.transactionVolume,
     lead.transactionValue,
     analysis ? `${analysis.forecast.current.low}-${analysis.forecast.current.high}` : "",

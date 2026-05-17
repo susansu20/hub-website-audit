@@ -38,7 +38,7 @@ export type LeadPayload = {
   email: string;
   url: string;
   salesSource: SalesSource;
-  websiteGoal: WebsiteGoal;
+  websiteGoals: WebsiteGoal[];
   transactionVolume: TransactionVolume;
   transactionValue: TransactionValue;
 };

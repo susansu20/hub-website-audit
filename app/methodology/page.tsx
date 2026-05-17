@@ -8,22 +8,22 @@ export const metadata: Metadata = {
 };
 
 const trustQs = [
-  "Above-the-fold has hero, one-line value statement, AND social proof.",
-  "Real, specific social proof is visible (case studies, results, testimonials with specifics), not buried or generic.",
-  "Brand is visually consistent across pages.",
+  "Above-the-fold should have a hero, one-line value statement, AND social proof.",
+  "Real, specific social proof should be visible (case studies, results, testimonials with specifics), not buried or generic.",
+  "Brand should be visually consistent across pages.",
 ];
 
 const experienceQs = [
-  "Top 3 internal pages are discoverable from the homepage in one click.",
-  "Mobile PageSpeed Insights performance score is 80 or above.",
-  "Specific action button above the fold AND repeated further down.",
+  "Top 3 internal pages should be discoverable from the homepage in one click.",
+  "Mobile PageSpeed Insights performance score should be 80 or above.",
+  "A specific action button should sit above the fold AND be repeated further down.",
 ];
 
 const positioningQs = [
-  "Every key page guides the visitor toward one clear next step.",
-  "Within seconds, visitor can tell who you serve and what result you deliver.",
-  "Site actively filters in ideal clients and filters out wrong-fit ones.",
-  "Site works as a silent salesperson (FAQs, objections, process, outcomes).",
+  "Every key page should guide the visitor toward one clear next step.",
+  "Within seconds, a visitor should be able to tell who you serve and what result you deliver.",
+  "Site should actively filter in ideal clients and filter out wrong-fit ones.",
+  "Site should work as a silent salesperson (FAQs, objections, process, outcomes).",
 ];
 
 export default function MethodologyPage() {

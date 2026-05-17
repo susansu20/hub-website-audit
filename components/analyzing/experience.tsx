@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, Lock } from "lucide-react";
 import { AnalyzingProgress } from "./progress-bar";
 import { LeadForm } from "./lead-form";
 import type { AnalysisResult } from "@/lib/types";
+import type { LeadPayload } from "@/lib/lead";
 
 type Props = { url: string };
 
@@ -19,8 +20,10 @@ type AnalysisState =
 export function AnalyzingExperience({ url }: Props) {
   const router = useRouter();
   const [modalOpen, setModalOpen] = useState(false);
-  const [formSubmitted, setFormSubmitted] = useState(false);
+  const [pendingLead, setPendingLead] = useState<LeadPayload | null>(null);
   const [analysis, setAnalysis] = useState<AnalysisState>({ status: "running" });
+  const navigatedRef = useRef(false);
+  const leadFiredRef = useRef(false);
 
   // Kick off the real analysis on mount
   useEffect(() => {
@@ -78,19 +81,39 @@ export function AnalyzingExperience({ url }: Props) {
     };
   }, [modalOpen]);
 
-  function onFormSuccess() {
-    setFormSubmitted(true);
-    setModalOpen(false);
-    if (analysis.status === "ready") {
+  // When both lead is captured AND analysis is ready, fire /api/lead and navigate.
+  useEffect(() => {
+    if (!pendingLead) return;
+    if (analysis.status !== "ready") return;
+    if (leadFiredRef.current) return;
+    leadFiredRef.current = true;
+
+    (async () => {
+      try {
+        await fetch("/api/lead", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...pendingLead, analysis: analysis.result }),
+        });
+      } catch (err) {
+        console.warn("[lead] submission failed, continuing to results:", err);
+      }
+      if (navigatedRef.current) return;
+      navigatedRef.current = true;
       window.setTimeout(() => {
         router.push(`/results/${analysis.result.hash}`);
       }, 700);
-    }
+    })();
+  }, [pendingLead, analysis, router]);
+
+  function onFormSubmit(payload: LeadPayload) {
+    setPendingLead(payload);
+    setModalOpen(false);
   }
 
+  const formSubmitted = pendingLead !== null;
   const finalize = formSubmitted && analysis.status === "ready";
   const errored = analysis.status === "error";
-  const analysisResult = analysis.status === "ready" ? analysis.result : null;
 
   return (
     <div className="bg-hub-bg min-h-screen">
@@ -142,11 +165,7 @@ export function AnalyzingExperience({ url }: Props) {
 
       {modalOpen ? (
         <Modal>
-          <LeadForm
-            url={url}
-            analysis={analysisResult}
-            onSuccess={onFormSuccess}
-          />
+          <LeadForm url={url} onSubmit={onFormSubmit} />
         </Modal>
       ) : null}
     </div>

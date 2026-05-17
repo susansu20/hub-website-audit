@@ -7,16 +7,16 @@ import { getCachedAnalysis, hashUrl, setCachedAnalysis } from "./cache";
 import { SCHEMA_VERSION, type AnalysisResult, type QuestionLayer, type QuestionResult, type QuestionScore } from "./types";
 
 const FRAMEWORK_QUESTIONS: { id: number; layer: QuestionLayer; question: string }[] = [
-  { id: 1, layer: "Trust", question: "Above-the-fold has hero, one-line value statement, AND social proof." },
-  { id: 2, layer: "Trust", question: "Real, specific social proof is visible (case studies, results, testimonials with specifics), not buried or generic." },
-  { id: 3, layer: "Trust", question: "Brand is visually consistent across pages, not built in 3 different eras." },
-  { id: 4, layer: "Experience", question: "Top 3 internal pages are discoverable from the homepage in one click via clear nav." },
-  { id: 5, layer: "Experience", question: "Mobile PageSpeed Insights performance score is 80 or above." },
-  { id: 6, layer: "Experience", question: "Specific action button above the fold (NOT 'Learn More' or 'Contact Us') AND repeated further down." },
-  { id: 7, layer: "Positioning", question: "Every key page guides the visitor toward one clear next step (not a buffet)." },
-  { id: 8, layer: "Positioning", question: "Within seconds, visitor can tell exactly who you serve and what result you deliver." },
-  { id: 9, layer: "Positioning", question: "Site actively filters in ideal clients and filters out wrong-fit ones (pricing, niche language, qualification cues)." },
-  { id: 10, layer: "Positioning", question: "Site works as a silent salesperson with FAQs, objection handling, process, and outcomes." },
+  { id: 1, layer: "Trust", question: "Above-the-fold should have a hero, a one-line value statement, AND social proof." },
+  { id: 2, layer: "Trust", question: "Real, specific social proof (case studies, results, testimonials with specifics) should be visible, not buried or generic." },
+  { id: 3, layer: "Trust", question: "Brand should be visually consistent across pages, not look like it was built in 3 different eras." },
+  { id: 4, layer: "Experience", question: "Top 3 internal pages should be discoverable from the homepage in one click via clear nav." },
+  { id: 5, layer: "Experience", question: "Mobile PageSpeed Insights performance score should be 80 or above." },
+  { id: 6, layer: "Experience", question: "A specific action button should sit above the fold (NOT 'Learn More' or 'Contact Us') AND be repeated further down." },
+  { id: 7, layer: "Positioning", question: "Every key page should guide the visitor toward one clear next step, not a buffet." },
+  { id: 8, layer: "Positioning", question: "Within seconds, a visitor should be able to tell exactly who you serve and what result you deliver." },
+  { id: 9, layer: "Positioning", question: "Site should actively filter in ideal clients and filter out wrong-fit ones (pricing, niche language, qualification cues)." },
+  { id: 10, layer: "Positioning", question: "Site should work as a silent salesperson, with FAQs, objection handling, process, and outcomes." },
 ];
 
 type ClaudeJsonResponse = {

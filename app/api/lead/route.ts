@@ -10,7 +10,7 @@ import {
 import { getCachedAnalysis, hashUrl, setCachedAnalysis } from "@/lib/cache";
 import { validateAndNormalizeUrl } from "@/lib/url";
 import { appendLeadRow } from "@/lib/sheets";
-import { sendAuditLeadEmail } from "@/lib/email";
+import { sendAuditLeadEmail, sendUserAuditEmail } from "@/lib/email";
 import type { AnalysisResult } from "@/lib/types";
 import { SCHEMA_VERSION } from "@/lib/types";
 
@@ -63,8 +63,11 @@ export async function POST(req: Request) {
   if (!body.salesSource || !salesSourceValues.has(body.salesSource)) {
     return NextResponse.json({ ok: false, error: "Invalid salesSource" }, { status: 400 });
   }
-  if (!body.websiteGoal || !websiteGoalValues.has(body.websiteGoal)) {
-    return NextResponse.json({ ok: false, error: "Invalid websiteGoal" }, { status: 400 });
+  if (!Array.isArray(body.websiteGoals) || body.websiteGoals.length === 0) {
+    return NextResponse.json({ ok: false, error: "Pick at least one website goal" }, { status: 400 });
+  }
+  if (!body.websiteGoals.every((g) => websiteGoalValues.has(g))) {
+    return NextResponse.json({ ok: false, error: "Invalid websiteGoals" }, { status: 400 });
   }
   if (!body.transactionVolume || !transactionVolumeValues.has(body.transactionVolume)) {
     return NextResponse.json({ ok: false, error: "Invalid transactionVolume" }, { status: 400 });
@@ -78,7 +81,7 @@ export async function POST(req: Request) {
     email,
     url: validation.normalized,
     salesSource: body.salesSource,
-    websiteGoal: body.websiteGoal,
+    websiteGoals: Array.from(new Set(body.websiteGoals)),
     transactionVolume: body.transactionVolume,
     transactionValue: body.transactionValue,
   };
@@ -101,24 +104,31 @@ export async function POST(req: Request) {
   const origin = originFromRequest(req);
   const publicUrl = origin ? `${origin}/results/${hash}` : null;
 
-  // Fire both writes in parallel — either failing should not block the user.
-  const [sheetsResult, emailResult] = await Promise.allSettled([
+  // Fire all three in parallel. Any of them failing should not block the user.
+  const [sheetsResult, susanEmailResult, userEmailResult] = await Promise.allSettled([
     appendLeadRow({ lead, analysis }),
     sendAuditLeadEmail({ lead, analysis, publicUrl }),
+    analysis
+      ? sendUserAuditEmail({ lead, analysis, publicUrl })
+      : Promise.resolve(),
   ]);
 
   if (sheetsResult.status === "rejected") {
     console.error("[lead] Sheets append failed:", sheetsResult.reason);
   }
-  if (emailResult.status === "rejected") {
-    console.error("[lead] Resend email failed:", emailResult.reason);
+  if (susanEmailResult.status === "rejected") {
+    console.error("[lead] Susan email failed:", susanEmailResult.reason);
+  }
+  if (userEmailResult.status === "rejected") {
+    console.error("[lead] User email failed:", userEmailResult.reason);
   }
 
   return NextResponse.json({
     ok: true,
     integrations: {
       sheets: sheetsResult.status === "fulfilled",
-      email: emailResult.status === "fulfilled",
+      susanEmail: susanEmailResult.status === "fulfilled",
+      userEmail: userEmailResult.status === "fulfilled",
     },
   });
 }

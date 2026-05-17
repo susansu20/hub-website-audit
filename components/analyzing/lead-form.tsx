@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { useState } from "react";
 import {
   SALES_SOURCES,
   TRANSACTION_VALUES,
@@ -14,19 +13,17 @@ import {
   type TransactionVolume,
   type WebsiteGoal,
 } from "@/lib/lead";
-import type { AnalysisResult } from "@/lib/types";
 
 type Props = {
   url: string;
-  analysis: AnalysisResult | null;
-  onSuccess: () => void;
+  onSubmit: (payload: LeadPayload) => void;
 };
 
 type FormState = {
   name: string;
   email: string;
   salesSource: SalesSource | "";
-  websiteGoal: WebsiteGoal | "";
+  websiteGoals: WebsiteGoal[];
   transactionVolume: TransactionVolume | "";
   transactionValue: TransactionValue | "";
 };
@@ -35,40 +32,39 @@ const initial: FormState = {
   name: "",
   email: "",
   salesSource: "",
-  websiteGoal: "",
+  websiteGoals: [],
   transactionVolume: "",
   transactionValue: "",
 };
 
-export function LeadForm({ url, analysis, onSuccess }: Props) {
+export function LeadForm({ url, onSubmit }: Props) {
   const [state, setState] = useState<FormState>(initial);
   const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-  const [waitingForAudit, setWaitingForAudit] = useState(false);
-  const pendingPayloadRef = useRef<LeadPayload | null>(null);
-  const submittedRef = useRef(false);
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setState((s) => ({ ...s, [key]: value }));
     if (error) setError(null);
   }
 
-  async function postLead(payload: LeadPayload, audit: AnalysisResult) {
-    const res = await fetch("/api/lead", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...payload, analysis: audit }),
+  function toggleGoal(goal: WebsiteGoal) {
+    setState((s) => {
+      const has = s.websiteGoals.includes(goal);
+      return {
+        ...s,
+        websiteGoals: has
+          ? s.websiteGoals.filter((g) => g !== goal)
+          : [...s.websiteGoals, goal],
+      };
     });
-    if (!res.ok) throw new Error("Submission failed");
+    if (error) setError(null);
   }
 
-  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (submittedRef.current) return;
     if (!state.name.trim()) return setError("Tell us your name.");
     if (!isValidEmail(state.email)) return setError("That email doesn't look right.");
     if (!state.salesSource) return setError("Pick where your sales are coming from.");
-    if (!state.websiteGoal) return setError("Pick what you want the website to do.");
+    if (state.websiteGoals.length === 0) return setError("Pick at least one thing you want the website to do.");
     if (!state.transactionVolume) return setError("Pick your transaction volume.");
     if (!state.transactionValue) return setError("Pick your average transaction value.");
 
@@ -77,60 +73,15 @@ export function LeadForm({ url, analysis, onSuccess }: Props) {
       email: state.email.trim(),
       url,
       salesSource: state.salesSource,
-      websiteGoal: state.websiteGoal,
+      websiteGoals: state.websiteGoals,
       transactionVolume: state.transactionVolume,
       transactionValue: state.transactionValue,
     };
-
-    setSubmitting(true);
-    pendingPayloadRef.current = payload;
-
-    if (!analysis) {
-      setWaitingForAudit(true);
-      return;
-    }
-
-    submittedRef.current = true;
-    try {
-      await postLead(payload, analysis);
-      onSuccess();
-    } catch {
-      setSubmitting(false);
-      submittedRef.current = false;
-      pendingPayloadRef.current = null;
-      setError("Couldn't save that. Try again in a second.");
-    }
+    onSubmit(payload);
   }
 
-  // Once the analysis arrives, fire the pending submission
-  useEffect(() => {
-    if (!analysis) return;
-    if (!pendingPayloadRef.current) return;
-    if (submittedRef.current) return;
-    const payload = pendingPayloadRef.current;
-    submittedRef.current = true;
-    (async () => {
-      try {
-        await postLead(payload, analysis);
-        onSuccess();
-      } catch {
-        setSubmitting(false);
-        setWaitingForAudit(false);
-        submittedRef.current = false;
-        pendingPayloadRef.current = null;
-        setError("Couldn't save that. Try again in a second.");
-      }
-    })();
-  }, [analysis, onSuccess]);
-
-  const buttonLabel = waitingForAudit
-    ? "Finalizing your audit"
-    : submitting
-    ? "Saving"
-    : "Show me my audit";
-
   return (
-    <form onSubmit={onSubmit} className="space-y-7" noValidate>
+    <form onSubmit={handleSubmit} className="space-y-7" noValidate>
       <div>
         <h2 className="font-serif text-3xl text-hub-navy">
           While we work, tell us about your business.
@@ -151,7 +102,6 @@ export function LeadForm({ url, analysis, onSuccess }: Props) {
             onChange={(e) => update("name", e.target.value)}
             placeholder="Jane Tan"
             className={textInputCls}
-            disabled={submitting}
           />
         </Field>
         <Field label="Email">
@@ -164,45 +114,41 @@ export function LeadForm({ url, analysis, onSuccess }: Props) {
             onChange={(e) => update("email", e.target.value)}
             placeholder="jane@yourbusiness.com"
             className={textInputCls}
-            disabled={submitting}
           />
         </Field>
       </div>
 
-      <RadioGroup
+      <SingleSelect
         label="Where is your business currently getting its sales from?"
         name="salesSource"
         value={state.salesSource}
         options={SALES_SOURCES}
         onChange={(v) => update("salesSource", v as SalesSource)}
-        disabled={submitting}
       />
 
-      <RadioGroup
+      <MultiSelect
         label="What would you like your website to do for you?"
-        name="websiteGoal"
-        value={state.websiteGoal}
+        hint="Pick all that apply."
+        name="websiteGoals"
+        values={state.websiteGoals}
         options={WEBSITE_GOALS}
-        onChange={(v) => update("websiteGoal", v as WebsiteGoal)}
-        disabled={submitting}
+        onToggle={(v) => toggleGoal(v as WebsiteGoal)}
       />
 
-      <RadioGroup
+      <SingleSelect
         label="On average, how many transactions does your business process per month?"
         name="transactionVolume"
         value={state.transactionVolume}
         options={TRANSACTION_VOLUMES}
         onChange={(v) => update("transactionVolume", v as TransactionVolume)}
-        disabled={submitting}
       />
 
-      <RadioGroup
+      <SingleSelect
         label="What's the average value of each transaction?"
         name="transactionValue"
         value={state.transactionValue}
         options={TRANSACTION_VALUES}
         onChange={(v) => update("transactionValue", v as TransactionValue)}
-        disabled={submitting}
       />
 
       {error ? (
@@ -214,21 +160,13 @@ export function LeadForm({ url, analysis, onSuccess }: Props) {
       <div className="pt-2">
         <button
           type="submit"
-          disabled={submitting}
-          className="inline-flex items-center justify-center gap-2 rounded-full bg-hub-navy px-7 py-4 text-base font-medium text-white hover:bg-hub-navy/90 transition-colors disabled:opacity-70"
+          className="inline-flex items-center justify-center gap-2 rounded-full bg-hub-navy px-7 py-4 text-base font-medium text-white hover:bg-hub-navy/90 transition-colors"
         >
-          {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-          {buttonLabel}
+          Show me my audit
         </button>
-        {waitingForAudit ? (
-          <p className="mt-3 text-xs text-hub-ink/50">
-            Hold tight, we&rsquo;ll take you straight to your audit when it&rsquo;s ready.
-          </p>
-        ) : (
-          <p className="mt-3 text-xs text-hub-ink/50">
-            We only use this to tailor your audit and follow up. No spam, ever.
-          </p>
-        )}
+        <p className="mt-3 text-xs text-hub-ink/50">
+          We only use this to tailor your audit and follow up. No spam, ever.
+        </p>
       </div>
     </form>
   );
@@ -249,23 +187,21 @@ function Field({
   );
 }
 
-function RadioGroup<T extends string>({
+function SingleSelect<T extends string>({
   label,
   name,
   value,
   options,
   onChange,
-  disabled,
 }: {
   label: string;
   name: string;
   value: string;
   options: readonly { value: T; label: string }[];
   onChange: (v: T) => void;
-  disabled?: boolean;
 }) {
   return (
-    <fieldset disabled={disabled}>
+    <fieldset>
       <legend className="text-sm font-medium text-hub-navy">{label}</legend>
       <div className="mt-2 flex flex-wrap gap-2">
         {options.map((opt) => {
@@ -277,7 +213,7 @@ function RadioGroup<T extends string>({
                 selected
                   ? "bg-hub-navy text-white border-hub-navy"
                   : "bg-white text-hub-ink/80 border-hub-ink/15 hover:border-hub-navy/40"
-              } ${disabled ? "opacity-60 cursor-not-allowed" : ""}`}
+              }`}
             >
               <input
                 type="radio"
@@ -286,7 +222,6 @@ function RadioGroup<T extends string>({
                 checked={selected}
                 onChange={() => onChange(opt.value)}
                 className="sr-only"
-                disabled={disabled}
               />
               {opt.label}
             </label>
@@ -297,5 +232,65 @@ function RadioGroup<T extends string>({
   );
 }
 
+function MultiSelect<T extends string>({
+  label,
+  hint,
+  name,
+  values,
+  options,
+  onToggle,
+}: {
+  label: string;
+  hint?: string;
+  name: string;
+  values: T[];
+  options: readonly { value: T; label: string }[];
+  onToggle: (v: T) => void;
+}) {
+  return (
+    <fieldset>
+      <legend className="text-sm font-medium text-hub-navy">{label}</legend>
+      {hint ? (
+        <div className="mt-0.5 text-xs text-hub-ink/50">{hint}</div>
+      ) : null}
+      <div className="mt-2 flex flex-wrap gap-2">
+        {options.map((opt) => {
+          const selected = values.includes(opt.value);
+          return (
+            <label
+              key={opt.value}
+              className={`cursor-pointer rounded-full border px-4 py-2 text-sm transition-colors inline-flex items-center gap-2 ${
+                selected
+                  ? "bg-hub-navy text-white border-hub-navy"
+                  : "bg-white text-hub-ink/80 border-hub-ink/15 hover:border-hub-navy/40"
+              }`}
+            >
+              <input
+                type="checkbox"
+                name={name}
+                value={opt.value}
+                checked={selected}
+                onChange={() => onToggle(opt.value)}
+                className="sr-only"
+              />
+              <span
+                aria-hidden
+                className={`h-4 w-4 rounded-full border flex items-center justify-center text-[10px] ${
+                  selected
+                    ? "bg-white text-hub-navy border-white"
+                    : "border-hub-ink/25"
+                }`}
+              >
+                {selected ? "✓" : ""}
+              </span>
+              {opt.label}
+            </label>
+          );
+        })}
+      </div>
+    </fieldset>
+  );
+}
+
 const textInputCls =
-  "w-full rounded-xl border border-hub-ink/15 bg-white px-4 py-3 text-base placeholder:text-hub-ink/40 focus:outline-none focus:ring-2 focus:ring-hub-orange/50 focus:border-hub-orange disabled:opacity-60";
+  "w-full rounded-xl border border-hub-ink/15 bg-white px-4 py-3 text-base placeholder:text-hub-ink/40 focus:outline-none focus:ring-2 focus:ring-hub-orange/50 focus:border-hub-orange";
