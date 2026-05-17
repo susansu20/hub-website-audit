@@ -74,9 +74,9 @@ export function AnalyzingProgress({
   const subtext = formSubmitted
     ? analysisReady
       ? "Loading your audit"
-      : "Lead saved. Finishing the analysis"
+      : "Finalizing your audit"
     : analysisReady
-    ? "Analysis ready. Unlock with the form to view"
+    ? "Audit ready. Unlock with the form to view"
     : "Your audit will be unlocked once you tell us about your business";
 
   return (

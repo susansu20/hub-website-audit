@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 import {
   SALES_SOURCES,
@@ -14,9 +14,11 @@ import {
   type TransactionVolume,
   type WebsiteGoal,
 } from "@/lib/lead";
+import type { AnalysisResult } from "@/lib/types";
 
 type Props = {
   url: string;
+  analysis: AnalysisResult | null;
   onSuccess: () => void;
 };
 
@@ -38,18 +40,31 @@ const initial: FormState = {
   transactionValue: "",
 };
 
-export function LeadForm({ url, onSuccess }: Props) {
+export function LeadForm({ url, analysis, onSuccess }: Props) {
   const [state, setState] = useState<FormState>(initial);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [waitingForAudit, setWaitingForAudit] = useState(false);
+  const pendingPayloadRef = useRef<LeadPayload | null>(null);
+  const submittedRef = useRef(false);
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setState((s) => ({ ...s, [key]: value }));
     if (error) setError(null);
   }
 
+  async function postLead(payload: LeadPayload, audit: AnalysisResult) {
+    const res = await fetch("/api/lead", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...payload, analysis: audit }),
+    });
+    if (!res.ok) throw new Error("Submission failed");
+  }
+
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (submittedRef.current) return;
     if (!state.name.trim()) return setError("Tell us your name.");
     if (!isValidEmail(state.email)) return setError("That email doesn't look right.");
     if (!state.salesSource) return setError("Pick where your sales are coming from.");
@@ -68,19 +83,51 @@ export function LeadForm({ url, onSuccess }: Props) {
     };
 
     setSubmitting(true);
+    pendingPayloadRef.current = payload;
+
+    if (!analysis) {
+      setWaitingForAudit(true);
+      return;
+    }
+
+    submittedRef.current = true;
     try {
-      const res = await fetch("/api/lead", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) throw new Error("Submission failed");
+      await postLead(payload, analysis);
       onSuccess();
     } catch {
       setSubmitting(false);
+      submittedRef.current = false;
+      pendingPayloadRef.current = null;
       setError("Couldn't save that. Try again in a second.");
     }
   }
+
+  // Once the analysis arrives, fire the pending submission
+  useEffect(() => {
+    if (!analysis) return;
+    if (!pendingPayloadRef.current) return;
+    if (submittedRef.current) return;
+    const payload = pendingPayloadRef.current;
+    submittedRef.current = true;
+    (async () => {
+      try {
+        await postLead(payload, analysis);
+        onSuccess();
+      } catch {
+        setSubmitting(false);
+        setWaitingForAudit(false);
+        submittedRef.current = false;
+        pendingPayloadRef.current = null;
+        setError("Couldn't save that. Try again in a second.");
+      }
+    })();
+  }, [analysis, onSuccess]);
+
+  const buttonLabel = waitingForAudit
+    ? "Finalizing your audit"
+    : submitting
+    ? "Saving"
+    : "Show me my audit";
 
   return (
     <form onSubmit={onSubmit} className="space-y-7" noValidate>
@@ -104,6 +151,7 @@ export function LeadForm({ url, onSuccess }: Props) {
             onChange={(e) => update("name", e.target.value)}
             placeholder="Jane Tan"
             className={textInputCls}
+            disabled={submitting}
           />
         </Field>
         <Field label="Email">
@@ -116,6 +164,7 @@ export function LeadForm({ url, onSuccess }: Props) {
             onChange={(e) => update("email", e.target.value)}
             placeholder="jane@yourbusiness.com"
             className={textInputCls}
+            disabled={submitting}
           />
         </Field>
       </div>
@@ -126,6 +175,7 @@ export function LeadForm({ url, onSuccess }: Props) {
         value={state.salesSource}
         options={SALES_SOURCES}
         onChange={(v) => update("salesSource", v as SalesSource)}
+        disabled={submitting}
       />
 
       <RadioGroup
@@ -134,6 +184,7 @@ export function LeadForm({ url, onSuccess }: Props) {
         value={state.websiteGoal}
         options={WEBSITE_GOALS}
         onChange={(v) => update("websiteGoal", v as WebsiteGoal)}
+        disabled={submitting}
       />
 
       <RadioGroup
@@ -142,6 +193,7 @@ export function LeadForm({ url, onSuccess }: Props) {
         value={state.transactionVolume}
         options={TRANSACTION_VOLUMES}
         onChange={(v) => update("transactionVolume", v as TransactionVolume)}
+        disabled={submitting}
       />
 
       <RadioGroup
@@ -150,6 +202,7 @@ export function LeadForm({ url, onSuccess }: Props) {
         value={state.transactionValue}
         options={TRANSACTION_VALUES}
         onChange={(v) => update("transactionValue", v as TransactionValue)}
+        disabled={submitting}
       />
 
       {error ? (
@@ -164,18 +217,18 @@ export function LeadForm({ url, onSuccess }: Props) {
           disabled={submitting}
           className="inline-flex items-center justify-center gap-2 rounded-full bg-hub-navy px-7 py-4 text-base font-medium text-white hover:bg-hub-navy/90 transition-colors disabled:opacity-70"
         >
-          {submitting ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Unlocking your audit…
-            </>
-          ) : (
-            "Show me my audit"
-          )}
+          {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+          {buttonLabel}
         </button>
-        <p className="mt-3 text-xs text-hub-ink/50">
-          We only use this to tailor your audit and follow up. No spam, ever.
-        </p>
+        {waitingForAudit ? (
+          <p className="mt-3 text-xs text-hub-ink/50">
+            Hold tight, we&rsquo;ll take you straight to your audit when it&rsquo;s ready.
+          </p>
+        ) : (
+          <p className="mt-3 text-xs text-hub-ink/50">
+            We only use this to tailor your audit and follow up. No spam, ever.
+          </p>
+        )}
       </div>
     </form>
   );
@@ -202,15 +255,17 @@ function RadioGroup<T extends string>({
   value,
   options,
   onChange,
+  disabled,
 }: {
   label: string;
   name: string;
   value: string;
   options: readonly { value: T; label: string }[];
   onChange: (v: T) => void;
+  disabled?: boolean;
 }) {
   return (
-    <fieldset>
+    <fieldset disabled={disabled}>
       <legend className="text-sm font-medium text-hub-navy">{label}</legend>
       <div className="mt-2 flex flex-wrap gap-2">
         {options.map((opt) => {
@@ -222,7 +277,7 @@ function RadioGroup<T extends string>({
                 selected
                   ? "bg-hub-navy text-white border-hub-navy"
                   : "bg-white text-hub-ink/80 border-hub-ink/15 hover:border-hub-navy/40"
-              }`}
+              } ${disabled ? "opacity-60 cursor-not-allowed" : ""}`}
             >
               <input
                 type="radio"
@@ -231,6 +286,7 @@ function RadioGroup<T extends string>({
                 checked={selected}
                 onChange={() => onChange(opt.value)}
                 className="sr-only"
+                disabled={disabled}
               />
               {opt.label}
             </label>
@@ -242,4 +298,4 @@ function RadioGroup<T extends string>({
 }
 
 const textInputCls =
-  "w-full rounded-xl border border-hub-ink/15 bg-white px-4 py-3 text-base placeholder:text-hub-ink/40 focus:outline-none focus:ring-2 focus:ring-hub-orange/50 focus:border-hub-orange";
+  "w-full rounded-xl border border-hub-ink/15 bg-white px-4 py-3 text-base placeholder:text-hub-ink/40 focus:outline-none focus:ring-2 focus:ring-hub-orange/50 focus:border-hub-orange disabled:opacity-60";

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, Lock } from "lucide-react";
 import { AnalyzingProgress } from "./progress-bar";
@@ -21,7 +21,6 @@ export function AnalyzingExperience({ url }: Props) {
   const [modalOpen, setModalOpen] = useState(false);
   const [formSubmitted, setFormSubmitted] = useState(false);
   const [analysis, setAnalysis] = useState<AnalysisState>({ status: "running" });
-  const navigatedRef = useRef(false);
 
   // Kick off the real analysis on mount
   useEffect(() => {
@@ -42,7 +41,13 @@ export function AnalyzingExperience({ url }: Props) {
           });
           return;
         }
-        setAnalysis({ status: "ready", result: data.result as AnalysisResult });
+        const result = data.result as AnalysisResult;
+        try {
+          sessionStorage.setItem(`audit:${result.hash}`, JSON.stringify(result));
+        } catch {
+          // sessionStorage may be unavailable in some browsers / private modes
+        }
+        setAnalysis({ status: "ready", result });
       } catch (err) {
         if (cancelled) return;
         setAnalysis({
@@ -73,25 +78,19 @@ export function AnalyzingExperience({ url }: Props) {
     };
   }, [modalOpen]);
 
-  // Navigate to results once analysis is ready AND lead form is submitted
-  useEffect(() => {
-    if (!formSubmitted) return;
-    if (analysis.status !== "ready") return;
-    if (navigatedRef.current) return;
-    navigatedRef.current = true;
-    const id = window.setTimeout(() => {
-      router.push(`/results/${analysis.result.hash}`);
-    }, 600);
-    return () => window.clearTimeout(id);
-  }, [analysis, formSubmitted, router]);
-
   function onFormSuccess() {
     setFormSubmitted(true);
     setModalOpen(false);
+    if (analysis.status === "ready") {
+      window.setTimeout(() => {
+        router.push(`/results/${analysis.result.hash}`);
+      }, 700);
+    }
   }
 
   const finalize = formSubmitted && analysis.status === "ready";
   const errored = analysis.status === "error";
+  const analysisResult = analysis.status === "ready" ? analysis.result : null;
 
   return (
     <div className="bg-hub-bg min-h-screen">
@@ -114,11 +113,7 @@ export function AnalyzingExperience({ url }: Props) {
 
         {errored ? (
           <ErrorState
-            message={
-              analysis.status === "error"
-                ? analysis.message
-                : "Unknown error"
-            }
+            message={analysis.status === "error" ? analysis.message : "Unknown error"}
             onRetry={() => router.push("/")}
           />
         ) : (
@@ -147,7 +142,11 @@ export function AnalyzingExperience({ url }: Props) {
 
       {modalOpen ? (
         <Modal>
-          <LeadForm url={url} onSuccess={onFormSuccess} />
+          <LeadForm
+            url={url}
+            analysis={analysisResult}
+            onSuccess={onFormSuccess}
+          />
         </Modal>
       ) : null}
     </div>

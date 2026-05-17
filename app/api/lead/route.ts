@@ -7,10 +7,12 @@ import {
   isValidEmail,
   type LeadPayload,
 } from "@/lib/lead";
-import { getCachedAnalysis, hashUrl } from "@/lib/cache";
+import { getCachedAnalysis, hashUrl, setCachedAnalysis } from "@/lib/cache";
 import { validateAndNormalizeUrl } from "@/lib/url";
 import { appendLeadRow } from "@/lib/sheets";
 import { sendAuditLeadEmail } from "@/lib/email";
+import type { AnalysisResult } from "@/lib/types";
+import { SCHEMA_VERSION } from "@/lib/types";
 
 export const maxDuration = 30;
 
@@ -25,8 +27,26 @@ function originFromRequest(req: Request): string | null {
   return host ? `${proto}://${host}` : null;
 }
 
+type LeadRequestBody = Partial<LeadPayload> & {
+  analysis?: AnalysisResult;
+};
+
+function isAnalysisResult(value: unknown): value is AnalysisResult {
+  if (!value || typeof value !== "object") return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v.hash === "string" &&
+    typeof v.url === "string" &&
+    typeof v.score === "number" &&
+    Array.isArray(v.questions) &&
+    typeof v.era === "object" &&
+    v.era !== null &&
+    v.version === SCHEMA_VERSION
+  );
+}
+
 export async function POST(req: Request) {
-  let body: Partial<LeadPayload>;
+  let body: LeadRequestBody;
   try {
     body = await req.json();
   } catch {
@@ -64,7 +84,19 @@ export async function POST(req: Request) {
   };
 
   const hash = hashUrl(lead.url);
-  const analysis = await getCachedAnalysis(hash).catch(() => null);
+
+  // Prefer the analysis result sent inline (fresh from /api/analyze). Fall back
+  // to the cache so old clients and re-sends still work.
+  let analysis: AnalysisResult | null = null;
+  if (isAnalysisResult(body.analysis) && body.analysis.hash === hash) {
+    analysis = body.analysis;
+    // Best-effort: refresh the cache in case the original write was lost.
+    setCachedAnalysis(analysis).catch((err) => {
+      console.warn("[lead] cache refresh failed:", err);
+    });
+  } else {
+    analysis = await getCachedAnalysis(hash).catch(() => null);
+  }
 
   const origin = originFromRequest(req);
   const publicUrl = origin ? `${origin}/results/${hash}` : null;
