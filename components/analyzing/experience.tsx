@@ -137,7 +137,8 @@ export function AnalyzingExperience({ url }: Props) {
         {errored ? (
           <ErrorState
             message={analysis.status === "error" ? analysis.message : "Unknown error"}
-            onRetry={() => router.push("/")}
+            onRetrySame={() => window.location.reload()}
+            onPickNew={() => router.push("/")}
           />
         ) : (
           <>
@@ -203,10 +204,12 @@ function Modal({ children }: { children: React.ReactNode }) {
 
 function ErrorState({
   message,
-  onRetry,
+  onRetrySame,
+  onPickNew,
 }: {
   message: string;
-  onRetry: () => void;
+  onRetrySame: () => void;
+  onPickNew: () => void;
 }) {
   return (
     <div className="mt-10 rounded-3xl bg-white border border-red-200 p-8 text-center">
@@ -216,14 +219,25 @@ function ErrorState({
       <h2 className="mt-4 font-serif text-2xl text-hub-navy">
         We couldn&rsquo;t finish your audit.
       </h2>
-      <p className="mt-2 text-sm text-hub-ink/70">{message}</p>
-      <button
-        type="button"
-        onClick={onRetry}
-        className="mt-6 inline-flex items-center justify-center rounded-full bg-hub-navy px-6 py-3 text-sm font-medium text-white hover:bg-hub-navy/90 transition-colors"
-      >
-        Try a different URL
-      </button>
+      <p className="mt-2 text-sm text-hub-ink/70 max-w-md mx-auto text-pretty">
+        {message}
+      </p>
+      <div className="mt-6 flex flex-col sm:flex-row gap-3 justify-center">
+        <button
+          type="button"
+          onClick={onRetrySame}
+          className="inline-flex items-center justify-center rounded-full bg-hub-navy px-6 py-3 text-sm font-medium text-white hover:bg-hub-navy/90 transition-colors"
+        >
+          Retry this audit
+        </button>
+        <button
+          type="button"
+          onClick={onPickNew}
+          className="inline-flex items-center justify-center rounded-full border border-hub-ink/15 bg-white px-6 py-3 text-sm font-medium text-hub-navy hover:bg-hub-bg transition-colors"
+        >
+          Try a different URL
+        </button>
+      </div>
     </div>
   );
 }
