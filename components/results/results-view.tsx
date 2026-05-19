@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowRight, Check, CircleHelp, Mail, PartyPopper, X } from "lucide-react";
 import type { AnalysisResult, QuestionResult } from "@/lib/types";
 import { ShareButtons } from "./share-buttons";
+import { EraReveal } from "./era-reveal";
 
 export function ResultsView({ result }: { result: AnalysisResult }) {
   const bookingUrl = process.env.HUB_SOLUTIONS_BOOKING_URL || "#";
@@ -59,10 +60,10 @@ function EraCard({ result }: { result: AnalysisResult }) {
       <div className="text-xs uppercase tracking-widest text-white/60">
         Era verdict
       </div>
-      <div className="mt-4 font-serif text-era text-white">
-        {result.era.year}
+      <div className="mt-5">
+        <EraReveal year={result.era.year} />
       </div>
-      <div className="mt-3 font-serif text-2xl sm:text-3xl text-hub-yellow">
+      <div className="mt-6 font-serif text-2xl sm:text-3xl text-hub-yellow">
         {result.era.verdict}
       </div>
       <p className="mt-4 max-w-2xl mx-auto text-white/80 text-pretty">
@@ -78,9 +79,9 @@ function ScoreCard({ result }: { result: AnalysisResult }) {
       <div className="text-xs uppercase tracking-widest text-hub-orange font-semibold">
         UX score
       </div>
-      <div className="mt-3 font-serif text-score text-hub-navy">
-        {result.score.toFixed(1)}
-        <span className="text-2xl text-hub-ink/30 align-top">/10</span>
+      <div className="mt-3 font-serif text-hub-navy inline-flex items-end justify-center gap-3 leading-none">
+        <span className="text-score">{result.score.toFixed(1)}</span>
+        <span className="text-2xl text-hub-ink/30 pb-3 sm:pb-4 md:pb-6">/10</span>
       </div>
       <div className="mt-2 inline-flex items-center rounded-full bg-hub-yellow px-4 py-1.5 text-sm font-semibold text-hub-navy">
         {result.bracketLabel}

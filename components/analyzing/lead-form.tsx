@@ -84,11 +84,11 @@ export function LeadForm({ url, onSubmit }: Props) {
     <form onSubmit={handleSubmit} className="space-y-7" noValidate>
       <div>
         <h2 className="font-serif text-3xl text-hub-navy">
-          While we work, tell us about your business.
+          Almost there. Let&rsquo;s see what you&rsquo;re missing.
         </h2>
         <p className="mt-2 text-hub-ink/60">
-          Six quick questions so Susan can tailor your audit and your strategy
-          call.
+          Six quick questions so your audit reflects the leads your business is
+          actually built to win.
         </p>
       </div>
 

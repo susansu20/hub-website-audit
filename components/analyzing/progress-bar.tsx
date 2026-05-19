@@ -76,8 +76,8 @@ export function AnalyzingProgress({
       ? "Loading your audit"
       : "Finalizing your audit"
     : analysisReady
-    ? "Audit ready. Unlock with the form to view"
-    : "Your audit will be unlocked once you tell us about your business";
+    ? "Your audit is ready. See how many leads you might be missing"
+    : "About to show you how many leads your website might be leaking";
 
   return (
     <div className="rounded-3xl bg-white border border-hub-ink/10 p-6 sm:p-7 shadow-sm">
